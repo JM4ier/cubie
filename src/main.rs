@@ -1,4 +1,5 @@
 use cartesian::*;
+use rand::{distributions::Standard, prelude::Distribution};
 
 type Coord = i8;
 type Pos = [Coord; 3];
@@ -8,19 +9,28 @@ type Polarity = bool;
 const POS: Polarity = true;
 const NEG: Polarity = false;
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 struct Face {
     axis: Axis,
     pol: Polarity,
 }
 
 #[inline]
-/// 0 -> 0
-/// 1 -> 2
-/// 2 -> 1
-/// 3 -> 3
-fn swap(a: u8) -> u8 {
-    3 & (216 >> (a << 1))
+fn third_axis(x: u8, y: u8) -> u8 {
+    x ^ y ^ 3
+}
+
+#[test]
+fn axis_test() {
+    for (x, y) in cartesian!(0..3, 0..3) {
+        if x == y {
+            continue;
+        }
+        let z = third_axis(x, y);
+        assert!(z != x);
+        assert!(z != y);
+        assert!(z < 3);
+    }
 }
 
 impl Face {
@@ -28,9 +38,18 @@ impl Face {
         if self.axis == face.axis {
             self
         } else {
-            let axis = swap(self.axis + face.axis);
+            let axis = third_axis(self.axis, face.axis);
             let pol = self.pol ^ face.pol ^ clockwise; // I hope this is somewhat correct TODO
-            Self {axis, pol}
+            Self { axis, pol }
+        }
+    }
+}
+
+impl Distribution<Face> for Standard {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Face {
+        Face {
+            axis: rng.gen_range(0..3),
+            pol: rng.gen(),
         }
     }
 }
@@ -52,13 +71,13 @@ impl Trig for Polarity {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 struct Ori {
     white: Face,
     blue: Face,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 struct Cubie {
     pos: Pos,
     rot: Ori,
@@ -87,7 +106,7 @@ impl Cubie {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct Cube {
     cubies: Vec<Cubie>,
 }
@@ -106,11 +125,17 @@ impl Cube {
         }
         Self { cubies }
     }
+    fn rotate(&mut self, face: Face, clockwise: bool) {
+        self.cubies
+            .iter_mut()
+            .for_each(|cubie| *cubie = cubie.rotate(face, clockwise))
+    }
 }
 
 fn main() {
-    for i in 0..4 {
-        let k = swap(i);
-        println!("{i} -> {k}");
+    let mut cube = Cube::new();
+    for _ in 0..50 {
+        cube.rotate(rand::random(), rand::random());
     }
+    println!("{cube:#?}");
 }
