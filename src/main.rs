@@ -4,6 +4,17 @@ use rand::{distributions::Standard, prelude::Distribution};
 type Coord = i8;
 type Pos = [Coord; 3];
 
+trait ToVector3 {
+    fn to_vec3(&self) -> Vector3;
+}
+
+impl ToVector3 for Pos {
+    #[inline]
+    fn to_vec3(&self) -> Vector3 {
+        Vector3::new(self[0] as f32, self[1] as f32, self[2] as f32)
+    }
+}
+
 type Axis = u8;
 type Polarity = bool;
 const POS: Polarity = true;
@@ -13,6 +24,24 @@ const NEG: Polarity = false;
 struct Face {
     axis: Axis,
     pol: Polarity,
+}
+
+impl Face {
+    #[inline]
+    fn normal(&self) -> Vector3 {
+        let mut vec = [0; 3];
+        vec[self.axis as usize] = if self.pol == POS { 1 } else { -1 };
+        vec.to_vec3()
+    }
+    #[inline]
+    fn area(&self) -> Vector3 {
+        let mut vec = [0; 3];
+        let a = self.axis as usize;
+        vec[a] = 1;
+        vec[(a + 1) % 3] = 10;
+        vec[(a + 2) % 3] = 10;
+        vec.to_vec3() * 0.1
+    }
 }
 
 #[inline]
@@ -104,6 +133,31 @@ impl Cubie {
             self
         }
     }
+    fn get_color(&self, face: Face) -> u8 {
+        if self.rot.white == face {
+            0 // white
+        } else if self.rot.white.axis == face.axis {
+            5 // yellow
+        } else if self.rot.blue == face {
+            1
+        } else if self.rot.blue.axis == face.axis {
+            4
+        } else {
+            let third = third_axis(self.rot.white.axis, self.rot.blue.axis);
+            assert!(third == face.axis);
+            let third_face = Face {
+                axis: third,
+                pol: self.rot.white.pol ^ self.rot.blue.pol,
+            };
+
+            // todo does this make any sense at all
+            if third_face == face {
+                2
+            } else {
+                3
+            }
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -132,10 +186,62 @@ impl Cube {
     }
 }
 
+use raylib::prelude::*;
+
 fn main() {
     let mut cube = Cube::new();
     for _ in 0..50 {
         cube.rotate(rand::random(), rand::random());
     }
     println!("{cube:#?}");
+
+    let (mut rl, thread) = raylib::init()
+        .size(640, 480)
+        .title("I <3 El Tony Mate")
+        .build();
+
+    let cam = Camera::orthographic(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 6.0);
+
+    while !rl.window_should_close() {
+        let mut d = rl.begin_drawing(&thread);
+
+        d.clear_background(Color::RAYWHITE);
+
+        let mut d = d.begin_mode3D(cam);
+        let big_size = 2.75;
+        let smol_size = 0.6;
+        d.draw_cube(Vector3::zero(), big_size, big_size, big_size, Color::BLACK);
+
+        let colors = [
+            Color::WHITE,
+            Color::BLUE,
+            Color::ORANGE,
+            Color::GREEN,
+            Color::PINK,
+            Color::YELLOW,
+        ];
+
+        for cubie in cube.cubies.iter() {
+            d.draw_cube(
+                cubie.pos.to_vec3(),
+                smol_size,
+                smol_size,
+                smol_size,
+                Color::GRAY,
+            );
+            for axis in 0..3 {
+                for pol in [NEG, POS] {
+                    let face = Face { axis, pol };
+
+                    let scale = 0.7;
+
+                    let offset = face.normal() * 0.5 * scale;
+                    let area = face.area() * scale;
+                    let position = cubie.pos.to_vec3() + offset;
+
+                    d.draw_cube_v(position, area, colors[cubie.get_color(face) as usize]);
+                }
+            }
+        }
+    }
 }
