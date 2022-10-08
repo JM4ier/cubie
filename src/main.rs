@@ -113,7 +113,7 @@ struct Cubie {
 }
 
 impl Cubie {
-    fn rotate(self, face: Face, clockwise: bool) -> Self {
+    fn rotate(self, face: Face, clockwise: Polarity) -> Self {
         if self.pos[face.axis as usize] == face.pol.sin() {
             let sin = clockwise.sin();
             let x = ((face.axis + 1) % 3) as usize;
@@ -139,16 +139,11 @@ impl Cubie {
         } else if self.rot.white.axis == face.axis {
             5 // yellow
         } else if self.rot.blue == face {
-            1
+            1 // blue
         } else if self.rot.blue.axis == face.axis {
-            4
+            4 // green
         } else {
-            let third = third_axis(self.rot.white.axis, self.rot.blue.axis);
-            assert!(third == face.axis);
-            let third_face = Face {
-                axis: third,
-                pol: self.rot.white.pol ^ self.rot.blue.pol,
-            };
+            let third_face = self.rot.blue.rotate(self.rot.white, NEG);
 
             // todo does this make any sense at all
             if third_face == face {
@@ -190,8 +185,11 @@ use raylib::prelude::*;
 
 fn main() {
     let mut cube = Cube::new();
-    for _ in 0..50 {
-        cube.rotate(rand::random(), rand::random());
+    for _ in 0..1 {
+        let clockwise = rand::random();
+        let face = rand::random();
+        cube.rotate(face, clockwise);
+        cube.rotate(face, !clockwise);
     }
     println!("{cube:#?}");
 
@@ -200,12 +198,14 @@ fn main() {
         .title("I <3 El Tony Mate")
         .build();
 
-    let cam = Camera::orthographic(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 6.0);
+    let mut cam = Camera::orthographic(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 6.0);
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
 
         d.clear_background(Color::RAYWHITE);
+
+        cam.position.rotate(Vector4::new(0.0, 0.0001, 0.0, 1.0));
 
         let mut d = d.begin_mode3D(cam);
         let big_size = 2.75;
@@ -215,9 +215,9 @@ fn main() {
         let colors = [
             Color::WHITE,
             Color::BLUE,
+            Color::PINK,
             Color::ORANGE,
             Color::GREEN,
-            Color::PINK,
             Color::YELLOW,
         ];
 
