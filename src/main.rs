@@ -55,7 +55,7 @@ impl Face {
         Self { axis: 1, pol: POS }
     }
     fn orange() -> Self {
-        Self { axis: 2, pol: POS }
+        Self::white().rotate(Self::blue(), true)
     }
     fn green() -> Self {
         Self::blue().invert()
@@ -367,7 +367,7 @@ fn main() {
         .title("I <3 El Tony Mate")
         .build();
 
-    let cam = Camera::orthographic(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 6.0);
+    let mut cam = Camera::orthographic(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 6.0);
 
     rl.set_target_fps(60);
 
@@ -397,7 +397,7 @@ fn main() {
 
         d.clear_background(Color::RAYWHITE);
 
-        //cam.position.rotate(Vector4::new(0.0, 0.0001, 0.0, 1.0));
+        cam.position.rotate(Vector4::new(0.0, 0.001, 0.0, 1.0));
 
         let mut d = d.begin_mode3D(cam);
         let big_size = 2.75;
