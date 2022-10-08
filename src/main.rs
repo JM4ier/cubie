@@ -1,6 +1,9 @@
 use cartesian::*;
 use rand::{distributions::Standard, prelude::Distribution};
 
+#[macro_use]
+mod testing;
+
 type Coord = i8;
 type Pos = [Coord; 3];
 
@@ -44,6 +47,34 @@ impl Face {
     }
 }
 
+impl Face {
+    fn white() -> Self {
+        Self { axis: 0, pol: POS }
+    }
+    fn blue() -> Self {
+        Self { axis: 1, pol: POS }
+    }
+    fn orange() -> Self {
+        Self { axis: 2, pol: POS }
+    }
+    fn green() -> Self {
+        Self::blue().invert()
+    }
+    fn yellow() -> Self {
+        Self::white().invert()
+    }
+    fn pink() -> Self {
+        Self::orange().invert()
+    }
+    fn all() -> Vec<Self> {
+        let mut v = vec![];
+        for (axis, pol) in cartesian!(0..3, [NEG, POS]) {
+            v.push(Self {axis, pol});
+        }
+        v
+    }
+}
+
 #[inline]
 fn third_axis(x: u8, y: u8) -> u8 {
     x ^ y ^ 3
@@ -63,16 +94,107 @@ fn axis_test() {
 }
 
 impl Face {
+    fn invert(mut self) -> Self {
+        self.pol = !self.pol;
+        self
+    }
     fn rotate(self, face: Face, clockwise: bool) -> Self {
+        if !clockwise {
+            return self.rotate(face.invert(), true);
+        }
         if self.axis == face.axis {
             self
         } else {
             let axis = third_axis(self.axis, face.axis);
-            let pol = self.pol ^ face.pol ^ clockwise; // I hope this is somewhat correct TODO
+            let pol_mod = face.axis == (self.axis + 2) % 3;
+            let pol = self.pol ^ pol_mod;
             Self { axis, pol }
         }
     }
 }
+
+#[test]
+fn rotation_test() {
+    for (axis1, axis2) in cartesian!(0..3, 0..3) {
+        let face1 = Face {
+            axis: axis1,
+            pol: POS,
+        };
+        let face2 = Face {
+            axis: axis2,
+            pol: POS,
+        };
+        let rot1 = face1.rotate(face2, POS);
+        let rot2 = rot1.rotate(face2, POS);
+
+        assert_eq!(face1.axis == face2.axis, rot1 == face1);
+        assert_eq!(rot2.axis, face1.axis);
+        assert_eq!(
+            rot2.pol == face1.pol,
+            face1.axis == face2.axis,
+            "{face1:?}  {face2:?}"
+        );
+    }
+}
+
+param_test!(
+    rotation_is_not_same_as_counterrotation(
+        face: Face::all(),
+        rot: Face::all(),
+    ) {
+        if face.axis == rot.axis {
+            return;
+        }
+        let rot1 = face.rotate(*rot, true);
+        let rot2 = face.rotate(*rot, false);
+        assert!(rot1 != rot2, "{face:?} {rot:?}");
+    }
+);
+
+param_test!(
+    rotation_test_2(
+        data: [
+            (Face::white(), Face::blue(), Face::pink()),
+            (Face::white(), Face::pink(), Face::green()),
+            (Face::white(), Face::green(), Face::orange()),
+            (Face::white(), Face::orange(), Face::blue()),
+            (Face::orange(), Face::orange(), Face::orange()),
+            (Face::orange(), Face::blue(), Face::white()),
+            (Face::orange(), Face::white(), Face::green()),
+        ],
+    ) {
+        let (axis, face, expected) = data;
+        let actual = face.rotate(*axis, true);
+        assert_eq!(actual, *expected);
+    }
+);
+
+param_test!(
+    rotation_noop_4(
+        face1: Face::all(),
+        face2: Face::all(),
+        clockwise: [false, true],
+    ) {
+        let mut face3 = *face1;
+        for _ in 0..4 {
+            face3 = face3.rotate(*face2, *clockwise);
+        }
+        assert_eq!(*face1, face3);
+    }
+);
+
+param_test!(
+    aligned_axis_invariant_rotation(
+        face1: Face::all(),
+        face2: Face::all(),
+        clockwise: [false, true],
+    ) {
+        if face1.axis != face2.axis {
+            return;
+        }
+        assert_eq!(*face1, face1.rotate(*face2, *clockwise));
+    }
+);
 
 impl Distribution<Face> for Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Face {
@@ -143,7 +265,7 @@ impl Cubie {
         } else if self.rot.blue.axis == face.axis {
             4 // green
         } else {
-            let third_face = self.rot.blue.rotate(self.rot.white, NEG);
+            let third_face = self.rot.blue.rotate(self.rot.white, true);
 
             // todo does this make any sense at all
             if third_face == face {
@@ -181,11 +303,22 @@ impl Cube {
     }
 }
 
+param_test!(
+    cube_inverse_rot_is_ident(
+        turn: Face::all(),
+    ) {
+        let mut cube = Cube::new();
+        cube.rotate(*turn, true);
+        cube.rotate(*turn, false);
+        assert_eq!(Cube::new(), cube, "turn is {turn:?}");
+    }
+);
+
 use raylib::prelude::*;
 
 fn main() {
     let mut cube = Cube::new();
-    for _ in 0..1 {
+    for _ in 0..0 {
         let clockwise = rand::random();
         let face = rand::random();
         cube.rotate(face, clockwise);
@@ -198,14 +331,37 @@ fn main() {
         .title("I <3 El Tony Mate")
         .build();
 
-    let mut cam = Camera::orthographic(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 6.0);
+    let cam = Camera::orthographic(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 6.0);
+
+    rl.set_target_fps(60);
+
+    let key_map = {
+        use KeyboardKey::*;
+        [
+            (KEY_W, Face::white()),
+            (KEY_B, Face::blue()),
+            (KEY_Y, Face::yellow()),
+            (KEY_G, Face::green()),
+            (KEY_P, Face::pink()),
+            (KEY_O, Face::orange()),
+        ]
+    };
 
     while !rl.window_should_close() {
+        let ccw = rl.is_key_down(KeyboardKey::KEY_LEFT_SHIFT)
+            || rl.is_key_down(KeyboardKey::KEY_RIGHT_SHIFT);
+
+        for (key, rot) in key_map.iter() {
+            if rl.is_key_pressed(*key) {
+                cube.rotate(*rot, !ccw);
+            }
+        }
+
         let mut d = rl.begin_drawing(&thread);
 
         d.clear_background(Color::RAYWHITE);
 
-        cam.position.rotate(Vector4::new(0.0, 0.0001, 0.0, 1.0));
+        //cam.position.rotate(Vector4::new(0.0, 0.0001, 0.0, 1.0));
 
         let mut d = d.begin_mode3D(cam);
         let big_size = 2.75;
