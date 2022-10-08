@@ -69,7 +69,7 @@ impl Face {
     fn all() -> Vec<Self> {
         let mut v = vec![];
         for (axis, pol) in cartesian!(0..3, [NEG, POS]) {
-            v.push(Self {axis, pol});
+            v.push(Self { axis, pol });
         }
         v
     }
@@ -98,16 +98,18 @@ impl Face {
         self.pol = !self.pol;
         self
     }
-    fn rotate(self, face: Face, clockwise: bool) -> Self {
+    fn rotate(self, mut face: Face, clockwise: bool) -> Self {
         if !clockwise {
-            return self.rotate(face.invert(), true);
+            face = face.invert();
         }
+        let face = face;
+
         if self.axis == face.axis {
             self
         } else {
             let axis = third_axis(self.axis, face.axis);
-            let pol_mod = face.axis == (self.axis + 2) % 3;
-            let pol = self.pol ^ pol_mod;
+            let pm1 = face.axis == (self.axis + 1) % 3;
+            let pol = self.pol ^ face.pol ^ pm1;
             Self { axis, pol }
         }
     }
@@ -166,6 +168,40 @@ param_test!(
         let (axis, face, expected) = data;
         let actual = face.rotate(*axis, true);
         assert_eq!(actual, *expected);
+    }
+);
+
+param_test!(
+    rotation_injectivity(
+        face1: Face::all(),
+        face2: Face::all(),
+        axis: Face::all(),
+    ) {
+        if face1 == face2 {
+            return;
+        }
+        assert!(face1.rotate(*axis, true) != face2.rotate(*axis, true));
+    }
+);
+
+param_test!(
+    opposite_rot_is_inverse1(
+        face: Face::all(),
+        rot: Face::all(),
+    ) {
+        let face1 = face.rotate(*rot, true).rotate(rot.invert(), true);
+        assert_eq!(*face, face1);
+    }
+);
+
+param_test!(
+    opposite_rot_is_inverse2(
+        face: Face::all(),
+        rot: Face::all(),
+    ) {
+        let face1 = face.rotate(*rot, true);
+        let face2 = face.rotate(rot.invert(), false);
+        assert_eq!(face1, face2);
     }
 );
 
@@ -310,7 +346,7 @@ param_test!(
         let mut cube = Cube::new();
         cube.rotate(*turn, true);
         cube.rotate(*turn, false);
-        assert_eq!(Cube::new(), cube, "turn is {turn:?}");
+        assert!(Cube::new() == cube, "turn is {turn:?}");
     }
 );
 
