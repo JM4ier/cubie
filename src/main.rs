@@ -239,7 +239,11 @@ fn main() {
         .title("I <3 El Tony Mate")
         .build();
 
-    let mut cam = Camera::orthographic(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 6.0);
+    let mut cam = Camera::perspective(Vector3::one() * 5.0, Vector3::zero(), Vector3::up(), 12.0);
+
+    let camera_dist = 20.0;
+    let mut camera_pos = 0;
+    let mut camera_up = true;
 
     rl.set_target_fps(60);
 
@@ -265,11 +269,32 @@ fn main() {
             }
         }
 
+        {
+            // camera management
+            if rl.is_key_pressed(KeyboardKey::KEY_RIGHT) {
+                camera_pos += 3;
+            }
+            if rl.is_key_pressed(KeyboardKey::KEY_LEFT) {
+                camera_pos += 1;
+            }
+            camera_pos &= 3;
+
+            if rl.is_key_pressed(KeyboardKey::KEY_UP) {
+                camera_up = true;
+            }
+            if rl.is_key_pressed(KeyboardKey::KEY_DOWN) {
+                camera_up = false;
+            }
+
+            let angle = (camera_pos as f32 + 0.5) * 0.5 * std::f32::consts::PI;
+            let y = if camera_up { 1.0 } else { -1.0 };
+            let pos = Vector3::new(angle.sin(), y * 0.5, angle.cos()) * camera_dist;
+            cam.position = pos;
+        }
+
         let mut d = rl.begin_drawing(&thread);
 
         d.clear_background(Color::RAYWHITE);
-
-        cam.position.rotate(Vector4::new(0.0, 0.001, 0.0, 1.0));
 
         let mut d = d.begin_mode3D(cam);
         let big_size = 2.75;
